@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import type { FraudEvaluationResponse } from '../types';
 
 interface PaginationInfo {
@@ -14,25 +14,17 @@ interface TransactionListProps {
   transactions: FraudEvaluationResponse[];
   pagination: PaginationInfo;
   onPageChange: (page: number) => void;
+  filter: string;
+  onFilterChange: (filter: string) => void;
 }
 
 export const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   pagination,
   onPageChange,
+  filter,
+  onFilterChange,
 }) => {
-  const [filter, setFilter] = useState<string>('all');
-  const [filteredTransactions, setFilteredTransactions] = useState(transactions);
-
-  useEffect(() => {
-    if (filter === 'all') {
-      setFilteredTransactions(transactions);
-    } else {
-      setFilteredTransactions(
-        transactions.filter((t) => t.riskCategory === filter)
-      );
-    }
-  }, [filter, transactions]);
 
   const getRiskColor = (category: string) => {
     switch (category) {
@@ -100,7 +92,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         </div>
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => onFilterChange(e.target.value)}
           className="border rounded px-3 py-2"
         >
           <option value="all">All</option>
@@ -122,14 +114,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             </tr>
           </thead>
           <tbody>
-            {filteredTransactions.length === 0 ? (
+            {transactions.length === 0 ? (
               <tr>
                 <td colSpan={5} className="text-center py-8 text-gray-500">
                   No transactions found
                 </td>
               </tr>
             ) : (
-              filteredTransactions.map((txn) => (
+              transactions.map((txn) => (
                 <tr key={txn.transactionId} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-3 font-mono text-sm">
                     {txn.transactionId}

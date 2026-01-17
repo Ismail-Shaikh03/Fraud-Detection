@@ -6,14 +6,14 @@ import { RiskScoreChart } from './RiskScoreChart';
 import { StatsCard } from './StatsCard';
 import { Modal } from './Modal';
 import { Toast } from './Toast';
-import { transactionApi } from '../services/api';
+import { transactionApi, adminApi } from '../services/api';
 import type { FraudEvaluationResponse } from '../types';
 
 export const Dashboard: React.FC = () => {
   const [transactions, setTransactions] = useState<FraudEvaluationResponse[]>([]);
   const [pagination, setPagination] = useState({
     page: 0,
-    size: 25,
+    size: 15,
     totalElements: 0,
     totalPages: 0,
     hasNext: false,
@@ -25,9 +25,12 @@ export const Dashboard: React.FC = () => {
     monitor: 0,
     flagged: 0,
   });
+  const [filter, setFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
     message: '',
     type: 'info',
@@ -43,10 +46,10 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Reload transactions when page changes
+  // Reload transactions when page or filter changes
   useEffect(() => {
     loadTransactions();
-  }, [pagination.page]);
+  }, [pagination.page, filter]);
 
   const loadStats = async () => {
     try {
@@ -59,7 +62,11 @@ export const Dashboard: React.FC = () => {
 
   const loadTransactions = async () => {
     try {
-      const response = await transactionApi.getTransactions(pagination.page, pagination.size);
+      const response = await transactionApi.getTransactions(
+        pagination.page, 
+        pagination.size,
+        filter !== 'all' ? filter : undefined
+      );
       setTransactions(response.content);
       setPagination({
         page: response.page,
@@ -84,6 +91,11 @@ export const Dashboard: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: newPage }));
   };
 
+  const handleFilterChange = (newFilter: string) => {
+    setFilter(newFilter);
+    setPagination((prev) => ({ ...prev, page: 0 })); // Reset to first page
+  };
+
   const handleTransactionProcessed = (_result: FraudEvaluationResponse) => {
     // Refresh data from backend
     loadData();
@@ -93,6 +105,37 @@ export const Dashboard: React.FC = () => {
 
   const handleLoadDataset = async () => {
     setShowModal(true);
+  };
+
+  const handleResetData = () => {
+    setShowResetModal(true);
+  };
+
+  const confirmResetData = async () => {
+    setResetting(true);
+    setToast({ message: '', type: 'info', isVisible: false });
+    
+    try {
+      const resetResult = await adminApi.resetData();
+      setToast({
+        message: `Successfully reset all data. Deleted: ${resetResult.deleted.transactions} transactions, ${resetResult.deleted.alerts} alerts, ${resetResult.deleted.userBaselines} baselines`,
+        type: 'success',
+        isVisible: true,
+      });
+      
+      // Reload data after reset (everything should be empty now)
+      await loadData();
+      // Reset to first page
+      setPagination((prev) => ({ ...prev, page: 0 }));
+    } catch (error: any) {
+      setToast({
+        message: `Error: ${error.response?.data?.error || error.message}`,
+        type: 'error',
+        isVisible: true,
+      });
+    } finally {
+      setResetting(false);
+    }
   };
 
   const confirmLoadDataset = async () => {
@@ -159,6 +202,17 @@ export const Dashboard: React.FC = () => {
         confirmColor="blue"
       />
 
+      <Modal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={confirmResetData}
+        title="Reset All Data"
+        message="This will permanently delete ALL transactions, alerts, and user baselines. This action cannot be undone. Continue?"
+        confirmText="Reset All Data"
+        cancelText="Cancel"
+        confirmColor="red"
+      />
+
       <header className="bg-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
@@ -170,20 +224,36 @@ export const Dashboard: React.FC = () => {
                 Real-time transaction monitoring and fraud analysis
               </p>
             </div>
-            <button
-              onClick={handleLoadDataset}
-              disabled={seeding}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {seeding ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Loading Dataset...</span>
-                </>
-              ) : (
-                <span>📊 Load Dataset (1000)</span>
-              )}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleResetData}
+                disabled={resetting || seeding}
+                className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {resetting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Resetting...</span>
+                  </>
+                ) : (
+                  <span>🗑️ Reset Data</span>
+                )}
+              </button>
+              <button
+                onClick={handleLoadDataset}
+                disabled={seeding || resetting}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {seeding ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Loading Dataset...</span>
+                  </>
+                ) : (
+                  <span>📊 Load Dataset (1000)</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -224,15 +294,15 @@ export const Dashboard: React.FC = () => {
 
         <TransactionForm onTransactionProcessed={handleTransactionProcessed} />
 
-        {transactions.length > 0 && (
-          <div className="mb-6">
-            <TransactionList
-              transactions={transactions}
-              pagination={pagination}
-              onPageChange={handlePageChange}
-            />
-          </div>
-        )}
+        <div className="mb-6">
+          <TransactionList
+            transactions={transactions}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+            filter={filter}
+            onFilterChange={handleFilterChange}
+          />
+        </div>
 
         <AlertManager />
       </main>

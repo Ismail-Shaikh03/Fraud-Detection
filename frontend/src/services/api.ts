@@ -16,9 +16,17 @@ export const transactionApi = {
     return response.data;
   },
   
-  getTransactions: async (page: number = 0, size: number = 25): Promise<PaginatedResponse<FraudEvaluationResponse>> => {
+  getTransactions: async (
+    page: number = 0, 
+    size: number = 15,
+    riskCategory?: string
+  ): Promise<PaginatedResponse<FraudEvaluationResponse>> => {
+    const params: any = { page, size };
+    if (riskCategory) {
+      params.riskCategory = riskCategory;
+    }
     const response = await api.get<PaginatedResponse<FraudEvaluationResponse>>('/transactions', {
-      params: { page, size }
+      params
     });
     return response.data;
   },
@@ -52,6 +60,13 @@ export const alertApi = {
       status,
       analystNotes,
     });
+    return response.data;
+  },
+};
+
+export const adminApi = {
+  resetData: async (): Promise<{ success: boolean; message: string; deleted: { transactions: number; alerts: number; userBaselines: number } }> => {
+    const response = await api.post<{ success: boolean; message: string; deleted: { transactions: number; alerts: number; userBaselines: number } }>('/admin/reset');
     return response.data;
   },
 };

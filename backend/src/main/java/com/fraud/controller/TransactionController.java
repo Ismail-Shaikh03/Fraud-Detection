@@ -47,11 +47,21 @@ public class TransactionController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getTransactions(
             @RequestParam(required = false, defaultValue = "0") int page,
-            @RequestParam(required = false, defaultValue = "25") int size) {
+            @RequestParam(required = false, defaultValue = "15") int size,
+            @RequestParam(required = false) String riskCategory) {
         
-        Page<Transaction> transactionPage = transactionRepository.findAll(
-            PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"))
-        );
+        Page<Transaction> transactionPage;
+        
+        if (riskCategory != null && !riskCategory.isEmpty() && !riskCategory.equals("all")) {
+            transactionPage = transactionRepository.findByRiskCategoryOrderByTimestampDesc(
+                riskCategory, 
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"))
+            );
+        } else {
+            transactionPage = transactionRepository.findAll(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"))
+            );
+        }
         
         List<FraudEvaluationResponse> responses = transactionPage.getContent().stream()
             .map(this::mapToResponse)
