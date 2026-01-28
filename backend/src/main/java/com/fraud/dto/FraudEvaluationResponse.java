@@ -23,6 +23,17 @@ public class FraudEvaluationResponse {
     private String explanation;
     private Boolean alertCreated;
     
+    // Additional fields for detail view
+    private String userId;
+    private Double amount;
+    private String merchantId;
+    private String merchantCategory;
+    private String deviceId;
+    private String locationState;
+    private String locationCountry;
+    private String timestamp;
+    private String channel;
+    
     @Data
     @Builder
     @NoArgsConstructor

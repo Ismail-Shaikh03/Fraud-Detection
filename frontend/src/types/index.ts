@@ -30,6 +30,36 @@ export interface FraudEvaluationResponse {
   triggeredRules: TriggeredRule[];
   explanation: string;
   alertCreated: boolean;
+  // Additional fields for detail view
+  userId?: string;
+  amount?: number;
+  merchantId?: string;
+  merchantCategory?: string;
+  deviceId?: string;
+  locationState?: string;
+  locationCountry?: string;
+  timestamp?: string;
+  channel?: string;
+}
+
+export interface TimeSeriesDataPoint {
+  date: string;
+  approved: number;
+  monitor: number;
+  flagged: number;
+  total: number;
+}
+
+export interface UserAnalytics {
+  userId: string;
+  transactions: FraudEvaluationResponse[];
+  stats: {
+    total: number;
+    approved: number;
+    monitor: number;
+    flagged: number;
+    avgAmount: number;
+  };
 }
 
 export interface Alert {

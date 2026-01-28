@@ -49,6 +49,9 @@ public class TransactionService {
         transaction.setRiskScore(evaluation.getRiskScore());
         transaction.setRiskCategory(evaluation.getRiskCategory());
         
+        // Store explanation
+        transaction.setExplanation(evaluation.getExplanation());
+        
         // Serialize and store triggered rules as JSON
         try {
             if (evaluation.getTriggeredRules() != null && !evaluation.getTriggeredRules().isEmpty()) {

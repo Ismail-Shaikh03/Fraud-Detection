@@ -3,8 +3,25 @@ import { alertApi } from '../services/api';
 import { format } from 'date-fns';
 import type { Alert } from '../types';
 
+interface PaginationInfo {
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
 export const AlertManager: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 0,
+    size: 15,
+    totalElements: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false,
+  });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
@@ -15,19 +32,36 @@ export const AlertManager: React.FC = () => {
     loadAlerts();
     const interval = setInterval(loadAlerts, 10000);
     return () => clearInterval(interval);
-  }, [filter]);
+  }, [filter, pagination.page]);
 
   const loadAlerts = async () => {
     try {
       setLoading(true);
       const alertStatus = filter === 'all' ? undefined : (filter as Alert['status']);
-      const data = await alertApi.getAlerts(alertStatus);
-      setAlerts(data);
+      const response = await alertApi.getAlerts(pagination.page, pagination.size, alertStatus);
+      setAlerts(response.content);
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        hasNext: response.hasNext,
+        hasPrevious: response.hasPrevious,
+      });
     } catch (error) {
       console.error('Failed to load alerts:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPagination((prev) => ({ ...prev, page: newPage }));
+  };
+
+  const handleFilterChange = (newFilter: string) => {
+    setFilter(newFilter);
+    setPagination((prev) => ({ ...prev, page: 0 })); // Reset to first page
   };
 
   const handleUpdateStatus = async () => {
@@ -59,17 +93,58 @@ export const AlertManager: React.FC = () => {
     }
   };
 
-  const filteredAlerts = filter === 'all' 
-    ? alerts 
-    : alerts.filter(a => a.status === filter);
+  const handlePrevious = () => {
+    if (pagination.hasPrevious) {
+      handlePageChange(pagination.page - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (pagination.hasNext) {
+      handlePageChange(pagination.page + 1);
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const totalPages = pagination.totalPages;
+    const currentPage = pagination.page;
+
+    if (totalPages <= 7) {
+      for (let i = 0; i < totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(0);
+      if (currentPage > 2) {
+        pages.push('...');
+      }
+      for (let i = Math.max(1, currentPage - 1); i <= Math.min(totalPages - 2, currentPage + 1); i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 3) {
+        pages.push('...');
+      }
+      pages.push(totalPages - 1);
+    }
+    return pages;
+  };
+
+  const startItem = pagination.page * pagination.size + 1;
+  const endItem = Math.min((pagination.page + 1) * pagination.size, pagination.totalElements);
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Fraud Alerts</h2>
+        <div>
+          <h2 className="text-2xl font-bold">Fraud Alerts</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Showing {startItem}-{endItem} of {pagination.totalElements} alerts
+          </p>
+        </div>
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => handleFilterChange(e.target.value)}
           className="border rounded px-3 py-2"
         >
           <option value="all">All Status</option>
@@ -82,11 +157,11 @@ export const AlertManager: React.FC = () => {
 
       {loading ? (
         <div className="text-center py-8">Loading alerts...</div>
-      ) : filteredAlerts.length === 0 ? (
+      ) : alerts.length === 0 ? (
         <div className="text-center py-8 text-gray-500">No alerts found</div>
       ) : (
         <div className="space-y-3">
-          {filteredAlerts.map((alert) => (
+          {alerts.map((alert) => (
             <div
               key={alert.id}
               className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -129,6 +204,57 @@ export const AlertManager: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {pagination.totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between border-t pt-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrevious}
+              disabled={!pagination.hasPrevious}
+              className="px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((pageNum, index) => {
+                if (pageNum === '...') {
+                  return (
+                    <span key={`ellipsis-${index}`} className="px-2">
+                      ...
+                    </span>
+                  );
+                }
+                const page = pageNum as number;
+                const isActive = page === pagination.page;
+                return (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-2 border rounded ${
+                      isActive
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    {page + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={handleNext}
+              disabled={!pagination.hasNext}
+              className="px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+          <div className="text-sm text-gray-600">
+            Page {pagination.page + 1} of {pagination.totalPages}
+          </div>
         </div>
       )}
 

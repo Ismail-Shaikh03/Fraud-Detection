@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { FraudEvaluationResponse } from '../types';
+import { TransactionDetailModal } from './TransactionDetailModal';
+import { transactionApi } from '../services/api';
 
 interface PaginationInfo {
   page: number;
@@ -16,6 +18,15 @@ interface TransactionListProps {
   onPageChange: (page: number) => void;
   filter: string;
   onFilterChange: (filter: string) => void;
+  onSearch: (filters: SearchFilters) => void;
+}
+
+interface SearchFilters {
+  transactionId?: string;
+  userId?: string;
+  merchantId?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export const TransactionList: React.FC<TransactionListProps> = ({
@@ -24,7 +35,41 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onPageChange,
   filter,
   onFilterChange,
+  onSearch,
 }) => {
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<FraudEvaluationResponse | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  const handleSearchChange = (key: keyof SearchFilters, value: string) => {
+    setSearchFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSearch = () => {
+    onSearch(searchFilters);
+  };
+
+  const handleClearSearch = () => {
+    setSearchFilters({});
+    onSearch({});
+  };
+
+  const handleRowClick = async (transaction: FraudEvaluationResponse) => {
+    // If we don't have full details, fetch them
+    if (!transaction.userId) {
+      try {
+        const fullTransaction = await transactionApi.getTransactionById(transaction.transactionId);
+        setSelectedTransaction(fullTransaction);
+      } catch (error) {
+        console.error('Failed to load transaction details:', error);
+        setSelectedTransaction(transaction);
+      }
+    } else {
+      setSelectedTransaction(transaction);
+    }
+    setShowDetailModal(true);
+  };
 
   const getRiskColor = (category: string) => {
     switch (category) {
@@ -82,25 +127,96 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const endItem = Math.min((pagination.page + 1) * pagination.size, pagination.totalElements);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h2 className="text-2xl font-bold">Recent Transactions</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Showing {startItem}-{endItem} of {pagination.totalElements} transactions
-          </p>
+    <>
+      <TransactionDetailModal
+        transaction={selectedTransaction}
+        isOpen={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+      />
+
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-2xl font-bold">Recent Transactions</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Showing {startItem}-{endItem} of {pagination.totalElements} transactions
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="px-4 py-2 border rounded hover:bg-gray-50"
+            >
+              {showSearch ? '✕ Hide Search' : '🔍 Search'}
+            </button>
+            <select
+              value={filter}
+              onChange={(e) => onFilterChange(e.target.value)}
+              className="border rounded px-3 py-2"
+            >
+              <option value="all">All</option>
+              <option value="APPROVED">Approved</option>
+              <option value="MONITOR">Monitor</option>
+              <option value="FLAGGED">Flagged</option>
+            </select>
+          </div>
         </div>
-        <select
-          value={filter}
-          onChange={(e) => onFilterChange(e.target.value)}
-          className="border rounded px-3 py-2"
-        >
-          <option value="all">All</option>
-          <option value="APPROVED">Approved</option>
-          <option value="MONITOR">Monitor</option>
-          <option value="FLAGGED">Flagged</option>
-        </select>
-      </div>
+
+        {showSearch && (
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="text"
+                placeholder="Transaction ID"
+                value={searchFilters.transactionId || ''}
+                onChange={(e) => handleSearchChange('transactionId', e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="text"
+                placeholder="User ID"
+                value={searchFilters.userId || ''}
+                onChange={(e) => handleSearchChange('userId', e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="text"
+                placeholder="Merchant ID"
+                value={searchFilters.merchantId || ''}
+                onChange={(e) => handleSearchChange('merchantId', e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="date"
+                placeholder="Start Date"
+                value={searchFilters.startDate || ''}
+                onChange={(e) => handleSearchChange('startDate', e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <input
+                type="date"
+                placeholder="End Date"
+                value={searchFilters.endDate || ''}
+                onChange={(e) => handleSearchChange('endDate', e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSearch}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Search
+                </button>
+                <button
+                  onClick={handleClearSearch}
+                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -122,7 +238,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               </tr>
             ) : (
               transactions.map((txn) => (
-                <tr key={txn.transactionId} className="border-b hover:bg-gray-50">
+                <tr 
+                  key={txn.transactionId} 
+                  className="border-b hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleRowClick(txn)}
+                >
                   <td className="py-2 px-3 font-mono text-sm">
                     {txn.transactionId}
                   </td>
@@ -207,6 +327,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };

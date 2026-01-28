@@ -59,6 +59,47 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
     }));
   };
 
+  const randomizeFields = () => {
+    const merchantCategories = [
+      'groceries', 'restaurant', 'gas', 'retail', 
+      'electronics', 'crypto', 'gift_cards', 'jewelry'
+    ];
+    
+    const usStates = [
+      'CA', 'NY', 'TX', 'FL', 'IL', 'PA', 'OH', 'GA', 
+      'NC', 'MI', 'NJ', 'VA', 'WA', 'AZ', 'MA', 'TN'
+    ];
+    
+    const countries = ['US', 'CA', 'MX', 'GB', 'AU'];
+    
+    // Generate random amount between $10 and $10000
+    const amount = Math.round((Math.random() * 9990 + 10) * 100) / 100;
+    
+    // Random timestamp within last 7 days
+    const now = new Date();
+    const daysAgo = Math.floor(Math.random() * 7);
+    const hoursAgo = Math.floor(Math.random() * 24);
+    const randomDate = new Date(now);
+    randomDate.setDate(now.getDate() - daysAgo);
+    randomDate.setHours(now.getHours() - hoursAgo);
+    
+    setFormData({
+      transactionId: `txn_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+      userId: `user_${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+      amount: amount,
+      merchantId: `merchant_${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+      merchantCategory: merchantCategories[Math.floor(Math.random() * merchantCategories.length)],
+      timestamp: randomDate.toISOString().slice(0, 16),
+      deviceId: `device_${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`,
+      locationState: usStates[Math.floor(Math.random() * usStates.length)],
+      locationCountry: countries[Math.floor(Math.random() * countries.length)],
+    });
+    
+    // Clear any previous result
+    setResult(null);
+    setError(null);
+  };
+
   const riskColorClass = result
     ? result.riskCategory === 'APPROVED'
       ? 'text-green-600'
@@ -200,13 +241,22 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Processing...' : 'Process Transaction'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={randomizeFields}
+            className="flex-1 bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700"
+          >
+            🎲 Randomize Fields
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Processing...' : 'Process Transaction'}
+          </button>
+        </div>
       </form>
 
       {error && (

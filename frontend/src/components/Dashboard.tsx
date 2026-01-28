@@ -3,11 +3,12 @@ import { TransactionForm } from './TransactionForm';
 import { TransactionList } from './TransactionList';
 import { AlertManager } from './AlertManager';
 import { RiskScoreChart } from './RiskScoreChart';
+import { TimeSeriesChart } from './TimeSeriesChart';
 import { StatsCard } from './StatsCard';
 import { Modal } from './Modal';
 import { Toast } from './Toast';
 import { transactionApi, adminApi } from '../services/api';
-import type { FraudEvaluationResponse } from '../types';
+import type { FraudEvaluationResponse, TimeSeriesDataPoint } from '../types';
 
 export const Dashboard: React.FC = () => {
   const [transactions, setTransactions] = useState<FraudEvaluationResponse[]>([]);
@@ -31,6 +32,8 @@ export const Dashboard: React.FC = () => {
   const [resetting, setResetting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesDataPoint[]>([]);
+  const [timeSeriesDays, setTimeSeriesDays] = useState(7);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
     message: '',
     type: 'info',
@@ -40,8 +43,10 @@ export const Dashboard: React.FC = () => {
   // Load transactions and stats from backend on mount and periodically
   useEffect(() => {
     loadData();
+    loadTimeSeriesData();
     const interval = setInterval(() => {
       loadStats(); // Only refresh stats, not transactions list (to preserve pagination)
+      loadTimeSeriesData();
     }, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, []);
@@ -87,6 +92,15 @@ export const Dashboard: React.FC = () => {
     await Promise.all([loadStats(), loadTransactions()]);
   };
 
+  const loadTimeSeriesData = async () => {
+    try {
+      const response = await transactionApi.getTimeSeriesData(timeSeriesDays);
+      setTimeSeriesData(response.data);
+    } catch (error) {
+      console.error('Failed to load time series data:', error);
+    }
+  };
+
   const handlePageChange = (newPage: number) => {
     setPagination((prev) => ({ ...prev, page: newPage }));
   };
@@ -94,6 +108,32 @@ export const Dashboard: React.FC = () => {
   const handleFilterChange = (newFilter: string) => {
     setFilter(newFilter);
     setPagination((prev) => ({ ...prev, page: 0 })); // Reset to first page
+  };
+
+  const handleSearch = async (filters: any) => {
+    try {
+      const response = await transactionApi.searchTransactions(
+        pagination.page,
+        pagination.size,
+        { ...filters, riskCategory: filter !== 'all' ? filter : undefined }
+      );
+      setTransactions(response.content);
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        hasNext: response.hasNext,
+        hasPrevious: response.hasPrevious,
+      });
+    } catch (error) {
+      console.error('Search failed:', error);
+      setToast({
+        message: 'Search failed. Please try again.',
+        type: 'error',
+        isVisible: true,
+      });
+    }
   };
 
   const handleTransactionProcessed = (_result: FraudEvaluationResponse) => {
@@ -286,10 +326,30 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {stats.total > 0 && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-bold mb-4">Risk Distribution</h2>
-            <RiskScoreChart data={chartData} />
-          </div>
+          <>
+            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+              <h2 className="text-2xl font-bold mb-4">Risk Distribution</h2>
+              <RiskScoreChart data={chartData} />
+            </div>
+            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Transaction Trends</h2>
+                <select
+                  value={timeSeriesDays}
+                  onChange={(e) => {
+                    setTimeSeriesDays(Number(e.target.value));
+                    loadTimeSeriesData();
+                  }}
+                  className="border rounded px-3 py-2"
+                >
+                  <option value={7}>Last 7 days</option>
+                  <option value={14}>Last 14 days</option>
+                  <option value={30}>Last 30 days</option>
+                </select>
+              </div>
+              <TimeSeriesChart data={timeSeriesData} />
+            </div>
+          </>
         )}
 
         <TransactionForm onTransactionProcessed={handleTransactionProcessed} />
@@ -301,6 +361,7 @@ export const Dashboard: React.FC = () => {
             onPageChange={handlePageChange}
             filter={filter}
             onFilterChange={handleFilterChange}
+            onSearch={handleSearch}
           />
         </div>
 
